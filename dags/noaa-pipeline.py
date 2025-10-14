@@ -17,14 +17,14 @@ ERRORS = [
 RETRIES = 3
 
 
-def fetch_data(station_id: str = DTW):
+def fetch_observations(station_id: str = DTW) -> dict:
     url = f"{ENDPOINT}{station_id}/observations/latest"
 
     for n in range(RETRIES):
         try:
-            response = req.get(url, headers={"Accept": "application/ld+json"})
-            response.raise_for_status()
-            break
+            resp = req.get(url, headers={"Accept": "application/ld+json"})
+            resp.raise_for_status()
+            return resp.json()
 
         except HTTPError as exc:
             code = exc.response.status_code
@@ -35,3 +35,17 @@ def fetch_data(station_id: str = DTW):
                 continue
 
             raise
+
+def parse_observation_json(obs_data: dict) -> dict:
+    props = obs_data.get("properties", {})
+    # todo: pull relevant fields
+    return {
+        # "timestamp": props.get("timestamp"),
+        # "temperature": props.get("temperature", {}).get("value"),
+        # "windSpeed": props.get("windSpeed", {}).get("value"),
+        # "windDirection": props.get("windDirection", {}).get("value"),
+        # "textDescription": props.get("textDescription"),
+        props
+    }
+
+def fetch_historical(station_id: str = DTW) -> pd.DataFrame:
