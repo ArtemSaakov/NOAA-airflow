@@ -1,12 +1,10 @@
 import requests as req
 from requests.exceptions import HTTPError
-import pandas as pd
 import time
 from http import HTTPStatus
 
 
-ENDPOINT = "https://api.weather.gov/stations/"
-DTW = "KDTW"
+NWS_ENDPOINT = "https://api.weather.gov/stations/"
 ERRORS = [
     HTTPStatus.TOO_MANY_REQUESTS,
     HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -14,11 +12,12 @@ ERRORS = [
     HTTPStatus.SERVICE_UNAVAILABLE,
     HTTPStatus.GATEWAY_TIMEOUT,
 ]
+NWS_STATION = "KDTW"  # Detroit Metro Airport
 RETRIES = 3
 
 
-def fetch_observations(station_id: str = DTW) -> dict:
-    url = f"{ENDPOINT}{station_id}/observations/latest"
+def fetch_observations(station_id: str = NWS_STATION) -> dict:
+    url = f"{NWS_ENDPOINT}{station_id}/observations/latest"
 
     for n in range(RETRIES):
         try:
@@ -43,9 +42,7 @@ def parse_observation_json(obs_data: dict) -> dict:
         # "timestamp": props.get("timestamp"),
         # "temperature": props.get("temperature", {}).get("value"),
         # "windSpeed": props.get("windSpeed", {}).get("value"),
-        # "windDirection": props.get("windDirection", {}).get("value"),
+        # "windDirection": props.get("windDirection", {}).get("value"),s
         # "textDescription": props.get("textDescription"),
         props
     }
-
-def fetch_historical(station_id: str = DTW) -> pd.DataFrame:
