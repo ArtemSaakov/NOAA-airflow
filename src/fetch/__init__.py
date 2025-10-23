@@ -1,4 +1,5 @@
 from .nws import (
+    fetch_observations,
     parse_observation_json,
 )
 from .noaa import (
@@ -7,8 +8,8 @@ from .noaa import (
 )
 
 __all__ = [
-    "fetch_historical",
     "fetch_observations",
     "parse_observation_json",
+    "fetch_historical",
     "process_historical",
 ]
