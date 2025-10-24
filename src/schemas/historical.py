@@ -1,17 +1,14 @@
 from typing import Optional
 from datetime import date
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 
 class HistoricalDailyRecord(BaseModel):
-    station_id: str = Field(..., description="Station identifier (NOAA GHCND code)")
-    record_date: date = Field(..., description="Date of the daily summary (YYYY-MM-DD)")
-    datatype: str = Field(..., description="Measurement type code (e.g., TMAX, TMIN, PRCP)")
-    value: float = Field(..., description="Measured value (units indicated in context)")
-    attributes: Optional[str] = Field(None, description="Metadata or flags associated with the record")
-
-    class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+    """Schema for a single daily historical weather record from NOAA GHCND. Uses Pydantic_V2"""
+    model_config = ConfigDict(
+        extra="forbid",
+        # JSON schema generation...
+        json_schema_extra={
             "example": {
                 "station_id": "USW00094847",
                 "record_date": "2025-10-17",
@@ -20,3 +17,30 @@ class HistoricalDailyRecord(BaseModel):
                 "attributes": ""
             }
         }
+    )
+
+    station_id: str = Field(...,
+                            description="Station identifier (NOAA GHCND code)")
+    record_date: date = Field(...,
+                              description="Date of the daily summary (YYYY-MM-DD)")
+    datatype: str = Field(...,
+                          description="Measurement type code (e.g., TMAX, TMIN, PRCP)")
+    value: float = Field(...,
+                         description="Measured value (units indicated in context)")
+    attributes: Optional[str] = Field(
+        None, description="Metadata or flags associated with the record")
+
+    @field_validator("datatype")
+    @classmethod
+    def confirm_known_datatype(cls, v):
+        allowed_types = {"TMAX", "TMIN", "TAVG", "PRCP", "SNOW", "SNWD"}
+        if v not in allowed_types:
+            raise ValueError(f"datatype must be one of {allowed_types}")
+        return v
+
+    @field_validator("value", mode='before')
+    @classmethod
+    def confirm_non_negative(cls, v, info):
+        if v is not None and v < 0:
+            raise ValueError(f"{info.field_name} must be non-negative")
+        return v
