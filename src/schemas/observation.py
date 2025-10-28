@@ -1,6 +1,6 @@
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, ValidationInfo
 
 
 class ObservationRecord(BaseModel):
@@ -29,7 +29,7 @@ class ObservationRecord(BaseModel):
 
     @field_validator("temperature_c", "wind_speed_m_s", mode='before')
     @classmethod
-    def confirm_non_negative(cls, v, info):
+    def confirm_non_negative(cls, v: float, info: ValidationInfo):
         if v is not None and v < 0:
             raise ValueError(f"{info.field_name} must be non-negative")
         return v
