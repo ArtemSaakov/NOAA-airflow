@@ -1,9 +1,9 @@
+cred.json
 .vscode
 airflow-venv
 logs
 config
 data
 .env
-cred.json
 FIXES_SUMMARY.md
 __pycache__/
