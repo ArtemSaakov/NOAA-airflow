@@ -2,17 +2,33 @@ import pandas as pd
 from typing import List
 from src.schemas.historical import HistoricalDailyRecord
 
+
 def compute_baseline_stats(
-    historical_records: List[HistoricalDailyRecord],
+    historical_records: List,
     value_field: str = "value",
     group_by: str = "month_day"
 ) -> pd.DataFrame:
     """
-    Given a list of HistoricalDailyRecord, compute baseline statistics by calendar day.
+    Given a list of HistoricalDailyRecord or dicts, compute baseline statistics by calendar day.
     Returns DataFrame with columns: month_day, mean, std, q10, q90.
+
+    Args:
+        historical_records: List of HistoricalDailyRecord or dicts with record_date and value
+        value_field: Name of field containing the values to aggregate
+        group_by: Field name to group by (will be created from record_date if needed)
+
+    Returns:
+        DataFrame with columns: month_day, mean, std, q10, q90
     """
-    # Convert list of records to DataFrame
-    df = pd.DataFrame([rec.model_dump() for rec in historical_records])
+    # Convert list of records to DataFrame, handling both Pydantic models and dicts
+    records_data = [
+        rec.model_dump() if hasattr(rec, 'model_dump') else rec
+        for rec in historical_records
+    ]
+    df = pd.DataFrame(records_data)
+    # Ensure record_date is datetime for strftime
+    if pd.api.types.is_object_dtype(df["record_date"]):
+        df["record_date"] = pd.to_datetime(df["record_date"])
     # Add month_day field
     df["month_day"] = df["record_date"].dt.strftime("%m-%d")
     # Group by month_day
@@ -24,16 +40,33 @@ def compute_baseline_stats(
     ).reset_index()
     return agg
 
+
 def enrich_with_baseline(
     df_obs: pd.DataFrame,
     baseline_df: pd.DataFrame,
     date_field: str = "date",
-    join_field: str = "month_day"
+    join_field: str = "month_day",
+    value_field: str = "value"
 ) -> pd.DataFrame:
     """
     Given an observations DataFrame and baseline stats DataFrame,
-    add baseline_mean, baseline_std, baseline_q10, baseline_q90 to the obs DataFrame.
-    Assumes obs DataFrame has a date field.
+    add baseline_mean, baseline_std, baseline_q10, baseline_q90 to the obs DataFrame
+    and compute anomaly z-scores.
+
+    Args:
+        df_obs: Observations DataFrame with a date field
+        baseline_df: Baseline stats DataFrame with month_day, mean, std, q10, q90
+        date_field: Name of date field in df_obs
+        join_field: Name of field to join on (typically month_day)
+        value_field: Name of value field in df_obs to compute anomaly for
+
+    Returns:
+        DataFrame with baseline columns and anomaly_z; NaN for anomaly_z when
+        baseline is missing or std is zero.
+
+    Warning:
+        Rows without baseline matches will have NaN for anomaly_z.
+        Rows where std=0 will have NaN (or inf if mean differs) for anomaly_z.
     """
     obs = df_obs.copy()
     obs[join_field] = obs[date_field].dt.strftime("%m-%d")
@@ -43,8 +76,22 @@ def enrich_with_baseline(
         on=join_field,
         suffixes=("", "_baseline")
     )
-    # Optionally compute anomaly
-    merged["anomaly_z"] = (
-        (merged["value"] - merged["mean"]) / merged["std"]
+
+    # Compute anomaly z-score with safe division
+    # Division by zero returns inf; NaN from missing baseline is preserved
+    merged["anomaly_z"] = pd.NA  # Initialize as nullable
+
+    # Only compute where both value and mean exist and std is non-zero
+    valid_mask = (
+        merged[value_field].notna() &
+        merged["mean"].notna() &
+        merged["std"].notna() &
+        (merged["std"] != 0)
     )
+
+    merged.loc[valid_mask, "anomaly_z"] = (
+        (merged.loc[valid_mask, value_field] - merged.loc[valid_mask, "mean"]) /
+        merged.loc[valid_mask, "std"]
+    )
+
     return merged
