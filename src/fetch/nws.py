@@ -1,3 +1,21 @@
+"""NWS API fetcher with retry logic for real-time weather observations.
+
+This module fetches latest observations from NOAA's National Weather Service (NWS) API.
+
+**Data Units:**
+- Temperature: degrees Celsius (°C)
+- Wind speed: meters per second (m/s)
+- Wind direction: degrees (0-360)
+- All values from NWS API are already in SI units (no conversion needed)
+
+**Credentials:**
+- NWS API requires no authentication (public endpoint)
+
+**Retry Strategy:**
+- Exponential backoff (2-4-8 seconds) for retryable HTTP errors (429, 500, 502, 503, 504)
+- Non-retryable errors (401, 403, 404, etc.) raise immediately
+"""
+
 import requests as req
 from requests.exceptions import HTTPError
 import time
@@ -7,29 +25,67 @@ import logging
 logger = logging.getLogger(__name__)
 
 NWS_ENDPOINT = "https://api.weather.gov/stations/"
-ERRORS = [
-    HTTPStatus.TOO_MANY_REQUESTS,
-    HTTPStatus.INTERNAL_SERVER_ERROR,
-    HTTPStatus.BAD_GATEWAY,
-    HTTPStatus.SERVICE_UNAVAILABLE,
-    HTTPStatus.GATEWAY_TIMEOUT,
+# Default station ID: Detroit Metro Airport weather station
+# Override via fetch_observations(station_id=...) for other locations
+NWS_STATION_DEFAULT = "KDTW"
+
+# HTTP status codes that warrant retry with exponential backoff
+RETRYABLE_ERRORS = [
+    HTTPStatus.TOO_MANY_REQUESTS,          # 429: Rate limit; aggressive backoff
+    HTTPStatus.INTERNAL_SERVER_ERROR,      # 500: Server error; try again
+    HTTPStatus.BAD_GATEWAY,                # 502: Temporary routing; try again
+    HTTPStatus.SERVICE_UNAVAILABLE,        # 503: Service overloaded; try again
+    HTTPStatus.GATEWAY_TIMEOUT,            # 504: Timeout; try again
 ]
-NWS_STATION = "KDTW"  # Detroit Metro Airport
+# HTTP status codes that should fail fast (no retry)
+FAIL_FAST_ERRORS = [
+    HTTPStatus.UNAUTHORIZED,               # 401: Invalid token; never retries
+    HTTPStatus.FORBIDDEN,                  # 403: Access denied; never retries
+    HTTPStatus.NOT_FOUND,                  # 404: Endpoint doesn't exist; never retries
+    HTTPStatus.BAD_REQUEST,                # 400: Malformed request; never retries
+]
 RETRIES = 3
 
 
-def fetch_observations(station_id: str = NWS_STATION) -> dict:
+def _calculate_backoff_delay(attempt: int, error_code: HTTPStatus) -> int:
+    """Calculate backoff delay in seconds based on error type and attempt number.
+    
+    Args:
+        attempt: 0-indexed attempt number (0, 1, 2, ...)
+        error_code: HTTP status code from the failed request
+        
+    Returns:
+        Delay in seconds before retry
+        
+    Strategy:
+        - 429 (rate limit): aggressive exponential backoff (3-6-12 seconds)
+        - Other retryable: gentle exponential backoff (2-4-8 seconds)
+    """
+    if error_code == HTTPStatus.TOO_MANY_REQUESTS:
+        # Rate limit: back off aggressively
+        return 3 * (2 ** attempt)  # 3, 6, 12 seconds
+    else:
+        # Other server errors: gentle backoff
+        return 2 * (2 ** attempt)  # 2, 4, 8 seconds
+
+
+def fetch_observations(station_id: str = None) -> dict:
     """Fetch latest observations from NWS API.
 
     Args:
-        station_id: NWS station identifier (e.g., KDTW)
+        station_id: NWS station identifier (e.g., 'KDTW' for Detroit Metro Airport).
+                   Defaults to NWS_STATION_DEFAULT if not provided.
 
     Returns:
-        Full JSON response from NWS /observations/latest endpoint
+        Full JSON response from NWS /observations/latest endpoint with properties including
+        temperature, wind_speed, wind_direction, and text_description (all SI units).
 
     Raises:
         HTTPError: If API returns non-retryable error after retries
     """
+    if station_id is None:
+        station_id = NWS_STATION_DEFAULT
+    
     url = f"{NWS_ENDPOINT}{station_id}/observations/latest"
 
     for n in range(RETRIES):
@@ -43,15 +99,15 @@ def fetch_observations(station_id: str = NWS_STATION) -> dict:
 
         except HTTPError as exc:
             code = exc.response.status_code
-            # rudimentary exponential backoff
-            if code in ERRORS:
-                wait_time = 2 ** (n + 1)
-                logger.warning(f"NWS API returned {code}. Retrying in {wait_time}s "
+            # Check if error is retryable
+            if code in RETRYABLE_ERRORS:
+                delay = _calculate_backoff_delay(n, HTTPStatus(code))
+                logger.warning(f"NWS API returned {code}. Retrying in {delay}s "
                                f"(attempt {n+1}/{RETRIES})")
-                time.sleep(wait_time)
+                time.sleep(delay)
                 continue
 
-            # Non-retryable error
+            # Fail-fast errors and other non-retryable errors
             logger.error(
                 f"NWS API returned non-retryable error {code}: {exc.response.text}")
             raise

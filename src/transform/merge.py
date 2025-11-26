@@ -30,10 +30,18 @@ def merge_obs_and_hist(
     hist = hist_df.copy()
     hist["month_day"] = hist[hist_date_field].apply(lambda d: d.strftime("%m-%d"))
 
+    before_rows = len(obs)
     merged = obs.merge(
         hist,
         how="left",
         on=["station_id", "month_day"],
         suffixes=("_obs", "_hist")
     )
+    after_rows = len(merged)
+    # Log merge stats
+    missing_matches = merged["mean"].isna().sum() if "mean" in merged.columns else None
+    if missing_matches is not None:
+        logger = __import__("logging").getLogger(__name__)
+        logger.info(f"Merged obs ({before_rows} rows) with hist; {missing_matches} rows had no historical match")
+
     return merged

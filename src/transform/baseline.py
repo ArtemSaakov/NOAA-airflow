@@ -1,12 +1,16 @@
 import pandas as pd
+import logging
 from typing import List
 from src.schemas.historical import HistoricalDailyRecord
+
+logger = logging.getLogger(__name__)
 
 
 def compute_baseline_stats(
     historical_records: List,
     value_field: str = "value",
-    group_by: str = "month_day"
+    group_by: str = "month_day",
+    years_back: int | None = None
 ) -> pd.DataFrame:
     """
     Given a list of HistoricalDailyRecord or dicts, compute baseline statistics by calendar day.
@@ -26,12 +30,22 @@ def compute_baseline_stats(
         for rec in historical_records
     ]
     df = pd.DataFrame(records_data)
-    # Ensure record_date is datetime for strftime
+    # Ensure record_date is datetime for operations
     if pd.api.types.is_object_dtype(df["record_date"]):
         df["record_date"] = pd.to_datetime(df["record_date"])
+    # Optionally restrict baseline to recent years to avoid long-term drift
+    if years_back is not None:
+        # Determine the latest year present and compute cutoff
+        max_year = df["record_date"].dt.year.max()
+        min_year = int(max_year - years_back + 1)
+        before_count = len(df)
+        df = df[df["record_date"].dt.year >= min_year]
+        after_count = len(df)
+        logger.info(f"Filtering historical records for baseline: kept {after_count}/{before_count} records from last {years_back} years (>= {min_year})")
     # Add month_day field
     df["month_day"] = df["record_date"].dt.strftime("%m-%d")
     # Group by month_day
+    logger.info(f"Computing baseline stats from {len(df)} historical records across {df['month_day'].nunique()} calendar days")
     agg = df.groupby("month_day")[value_field].agg(
         mean="mean",
         std="std",

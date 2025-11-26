@@ -25,7 +25,7 @@ class HistoricalDailyRecord(BaseModel):
     datatype: str = Field(...,
                           description="Measurement type code (e.g., TMAX, TMIN, PRCP)")
     value: float = Field(...,
-                         description="Measured value (units indicated in context)")
+                         description="Measured value. Units depend on `datatype` (e.g., TMAX/TMIN/TAVG in °C after any fetch-layer conversions). See fetch.process_historical for conversion notes.")
     attributes: Optional[str] = Field(
         None, description="Metadata or flags associated with the record")
 

@@ -1,3 +1,25 @@
+"""NOAA GHCND API fetcher with retry logic and credential management.
+
+This module fetches historical daily weather summaries from NOAA's Global Historical
+Climatology Network - Daily (GHCND) dataset. 
+
+**Data Transformations:**
+- TAVG (average temperature) is returned by NOAA in tenths of °C (e.g., 225 = 22.5°C)
+- process_historical() divides by 10 to convert to standard °C units
+- This transformation happens BEFORE schema validation, so schemas expect data in °C
+- Supported datatypes: TMAX, TMIN, TAVG, PRCP, SNOW, SNWD (defined in HistoricalDailyRecord schema)
+
+**Credentials:**
+- Token loaded from NOAA_TOKEN environment variable (preferred)
+- Falls back to cred.json file in project root (loaded lazily, on first API call)
+- See _load_token() and get_token() for details
+
+**Retry Strategy:**
+- Exponential backoff (2-4-8 seconds) for retryable HTTP errors (429, 500, 502, 503, 504)
+- Non-retryable errors (401, 403, 404, etc.) raise immediately
+- See ERRORS list and fetch_historical() for details
+"""
+
 import requests as req
 from requests.exceptions import HTTPError
 import time
@@ -11,15 +33,48 @@ import logging
 logger = logging.getLogger(__name__)
 
 NOAA_ENDPOINT = "https://www.ncei.noaa.gov/access/services/data/v1"
-NOAA_STATION = "USW00094847"
-ERRORS = [
-    HTTPStatus.TOO_MANY_REQUESTS,
-    HTTPStatus.INTERNAL_SERVER_ERROR,
-    HTTPStatus.BAD_GATEWAY,
-    HTTPStatus.SERVICE_UNAVAILABLE,
-    HTTPStatus.GATEWAY_TIMEOUT,
+# Default station ID: Detroit Metropolitan Airport weather station
+# Override via fetch_historical(station_id=...) for other locations
+NOAA_STATION_DEFAULT = "USW00094847"
+
+# HTTP status codes that warrant retry with exponential backoff
+RETRYABLE_ERRORS = [
+    HTTPStatus.TOO_MANY_REQUESTS,          # 429: Rate limit; aggressive backoff
+    HTTPStatus.INTERNAL_SERVER_ERROR,      # 500: Server error; try again
+    HTTPStatus.BAD_GATEWAY,                # 502: Temporary routing; try again
+    HTTPStatus.SERVICE_UNAVAILABLE,        # 503: Service overloaded; try again
+    HTTPStatus.GATEWAY_TIMEOUT,            # 504: Timeout; try again
+]
+# HTTP status codes that should fail fast (no retry)
+FAIL_FAST_ERRORS = [
+    HTTPStatus.UNAUTHORIZED,               # 401: Invalid token; never retries
+    HTTPStatus.FORBIDDEN,                  # 403: Access denied; never retries
+    HTTPStatus.NOT_FOUND,                  # 404: Endpoint doesn't exist; never retries
+    HTTPStatus.BAD_REQUEST,                # 400: Malformed request; never retries
 ]
 RETRIES = 3
+
+
+def _calculate_backoff_delay(attempt: int, error_code: HTTPStatus) -> int:
+    """Calculate backoff delay in seconds based on error type and attempt number.
+    
+    Args:
+        attempt: 0-indexed attempt number (0, 1, 2, ...)
+        error_code: HTTP status code from the failed request
+        
+    Returns:
+        Delay in seconds before retry
+        
+    Strategy:
+        - 429 (rate limit): aggressive exponential backoff (3-6-12 seconds)
+        - Other retryable: gentle exponential backoff (2-4-8 seconds)
+    """
+    if error_code == HTTPStatus.TOO_MANY_REQUESTS:
+        # Rate limit: back off aggressively
+        return 3 * (2 ** attempt)  # 3, 6, 12 seconds
+    else:
+        # Other server errors: gentle backoff
+        return 2 * (2 ** attempt)  # 2, 4, 8 seconds
 
 
 def _load_token() -> str:
@@ -34,7 +89,9 @@ def _load_token() -> str:
         logger.info("Loaded NOAA token from environment variable")
         return token
     
-    # Fall back to cred.json
+    # Fall back to cred.json method:
+    # Utilizes file named cred.json in project root
+    # and expects JSON keyword 'token'
     try:
         cred_path = Path(__file__).parent.parent.parent / "cred.json"
         token = json.loads(cred_path.read_text())["token"]
@@ -58,14 +115,15 @@ def get_token() -> str:
 _TOKEN_CACHE = None
 
 
-def fetch_historical(start_date: str, end_date: str, token: str = None, station_id: str = NOAA_STATION) -> list:
+def fetch_historical(start_date: str, end_date: str, token: str = None, station_id: str = None) -> list:
     """Fetch historical daily summaries from NOAA GHCND API.
     
     Args:
         start_date: Start date in YYYY-MM-DD format
         end_date: End date in YYYY-MM-DD format
         token: NOAA API token (defaults to loaded token if not provided)
-        station_id: NOAA station ID (GHCND code)
+        station_id: NOAA station ID (GHCND code, e.g., 'USW00094847' for Detroit).
+                   Defaults to NOAA_STATION_DEFAULT if not provided.
     
     Returns:
         List of daily summary records from NOAA API
@@ -75,6 +133,8 @@ def fetch_historical(start_date: str, end_date: str, token: str = None, station_
     """
     if token is None:
         token = get_token()
+    if station_id is None:
+        station_id = NOAA_STATION_DEFAULT
     
     params = {
         "dataset": "daily-summaries",
@@ -99,15 +159,15 @@ def fetch_historical(start_date: str, end_date: str, token: str = None, station_
 
         except HTTPError as exc:
             code = exc.response.status_code
-            # rudimentary exponential backoff
-            if code in ERRORS:
-                wait_time = 2 ** (n + 1)
-                logger.warning(f"NOAA API returned {code}. Retrying in {wait_time}s "
+            # Check if error is retryable
+            if code in RETRYABLE_ERRORS:
+                delay = _calculate_backoff_delay(n, HTTPStatus(code))
+                logger.warning(f"NOAA API returned {code}. Retrying in {delay}s "
                              f"(attempt {n+1}/{RETRIES})")
-                time.sleep(wait_time)
+                time.sleep(delay)
                 continue
             
-            # Non-retryable error
+            # Fail-fast errors and other non-retryable errors
             logger.error(f"NOAA API returned non-retryable error {code}: {exc.response.text}")
             raise
         
@@ -122,11 +182,31 @@ def fetch_historical(start_date: str, end_date: str, token: str = None, station_
     raise RuntimeError(f"Failed to fetch NOAA data after {RETRIES} retries")
 
 def process_historical(data: list[dict]) -> pd.DataFrame:
+    """Process raw NOAA GHCND historical records into standard format.
+    
+    **Important Data Transformations:**
+    - Extracts only TAVG (daily average temperature) from raw records
+    - Converts TAVG from tenths of °C to °C (e.g., 225 → 22.5)
+    - NOAA API returns temperature data in tenths of degrees; this is a known quirk
+    - See module docstring for details on data units and schemas
+    
+    Args:
+        data: List of dicts from NOAA API response, each containing DATE, TAVG, etc.
+        
+    Returns:
+        DataFrame with columns: date (YYYY-MM-DD), temp_avg (°C)
+        Rows with missing TAVG values are preserved with NaN in temp_avg
+        
+    Raises:
+        KeyError: If expected columns (DATE, TAVG) are missing from input
+    """
     df = pd.DataFrame(data)
     # keep only date and tavg columns
     df = df[["DATE", "TAVG"]]
     # rename columns
     df = df.rename(columns={"DATE": "date", "TAVG": "temp_avg"})
-    # convert TAVG from tenths of degrees C to degrees C
+    # IMPORTANT: convert TAVG from tenths of degrees C to degrees C
+    # NOAA GHCND API returns all temperature values as 10x their actual value
+    # Example: 225 in raw data = 22.5°C after conversion
     df["temp_avg"] = df["temp_avg"].apply(lambda x: x / 10 if pd.notnull(x) else x)
     return df
