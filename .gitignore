@@ -1,9 +1,9 @@
 cred.json
 .vscode
+.github
 airflow-venv
 logs
 config
 data
 .env
-FIXES_SUMMARY.md
 __pycache__/
