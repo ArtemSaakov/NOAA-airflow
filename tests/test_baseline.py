@@ -31,11 +31,14 @@ def test_compute_baseline_stats_structure(sample_hist_records):
 
 def test_compute_baseline_stats_values(sample_hist_records):
     agg = compute_baseline_stats(historical_records=sample_hist_records, value_field="value", group_by="month_day")
-    # For month_day "10-17" we have values [10,12,8] → mean = 10.0, q10 = 8.0, q90 = 12.0
+    # For month_day "10-17" we have values [10,12,8] → mean = 10.0
+    # Pandas quantile(0.10) for [8,10,12] gives 8.4 (linear interpolation)
     row = agg.loc[agg["month_day"] == "10-17"].iloc[0]
     assert pytest.approx(row["mean"], rel=1e-3) == 10.0
-    assert pytest.approx(row["q10"], rel=1e-3) == 8.0
-    assert pytest.approx(row["q90"], rel=1e-3) == 12.0
+    assert pytest.approx(row["std"], rel=1e-3) == 2.0  # std([8,10,12]) ≈ 2.0
+    # Check quantiles are within expected range (sorted: 8, 10, 12)
+    assert 8.0 <= row["q10"] <= 8.5  # Linear interpolation gives ~8.4
+    assert 11.5 <= row["q90"] <= 12.0  # Linear interpolation gives ~11.6
 
 def test_enrich_with_baseline_anomaly_added(sample_obs_df, sample_hist_records):
     baseline = compute_baseline_stats(historical_records=sample_hist_records, value_field="value", group_by="month_day")

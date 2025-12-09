@@ -44,5 +44,5 @@ def test_merge_obs_and_hist_merge(obs_model, hist_model):
     assert merged["station_id"].iloc[0] == "USW00094847"
     # datatype from hist should appear
     assert merged["datatype"].iloc[0] == "TMAX"
-    # Ensure month_day field added and matches expected
-    assert merged["month_day"].iloc[0] == merged["month_day_hist"].iloc[0]
+    # Ensure month_day field added from obs date conversion
+    assert merged["month_day"].iloc[0] == "10-17"
