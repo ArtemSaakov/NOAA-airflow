@@ -49,14 +49,14 @@ RETRIES = 3
 
 def _calculate_backoff_delay(attempt: int, error_code: HTTPStatus) -> int:
     """Calculate backoff delay in seconds based on error type and attempt number.
-    
+
     Args:
         attempt: 0-indexed attempt number (0, 1, 2, ...)
         error_code: HTTP status code from the failed request
-        
+
     Returns:
         Delay in seconds before retry
-        
+
     Strategy:
         - 429 (rate limit): aggressive exponential backoff (3-6-12 seconds)
         - Other retryable: gentle exponential backoff (2-4-8 seconds)
@@ -85,7 +85,7 @@ def fetch_observations(station_id: str = None) -> dict:
     """
     if station_id is None:
         station_id = NWS_STATION_DEFAULT
-    
+
     url = f"{NWS_ENDPOINT}{station_id}/observations/latest"
 
     for n in range(RETRIES):

@@ -3,6 +3,7 @@ from src.schemas.observation import ObservationRecord
 from src.schemas.historical import HistoricalDailyRecord
 from typing import List, Union
 
+
 def records_to_df(
     records: List[Union[ObservationRecord, HistoricalDailyRecord]]
 ) -> pd.DataFrame:
@@ -11,6 +12,7 @@ def records_to_df(
     to a pandas DataFrame.
     """
     return pd.DataFrame([rec.model_dump() for rec in records])
+
 
 def merge_obs_and_hist(
     obs_df: pd.DataFrame,
@@ -28,7 +30,8 @@ def merge_obs_and_hist(
     obs["month_day"] = obs["date"].apply(lambda d: d.strftime("%m-%d"))
 
     hist = hist_df.copy()
-    hist["month_day"] = hist[hist_date_field].apply(lambda d: d.strftime("%m-%d"))
+    hist["month_day"] = hist[hist_date_field].apply(
+        lambda d: d.strftime("%m-%d"))
 
     before_rows = len(obs)
     merged = obs.merge(
@@ -39,9 +42,11 @@ def merge_obs_and_hist(
     )
     after_rows = len(merged)
     # Log merge stats
-    missing_matches = merged["mean"].isna().sum() if "mean" in merged.columns else None
+    missing_matches = merged["mean"].isna().sum(
+    ) if "mean" in merged.columns else None
     if missing_matches is not None:
         logger = __import__("logging").getLogger(__name__)
-        logger.info(f"Merged obs ({before_rows} rows) with hist; {missing_matches} rows had no historical match")
+        logger.info(
+            f"Merged obs ({before_rows} rows) with hist; {missing_matches} rows had no historical match")
 
     return merged

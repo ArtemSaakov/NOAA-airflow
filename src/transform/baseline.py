@@ -41,11 +41,13 @@ def compute_baseline_stats(
         before_count = len(df)
         df = df[df["record_date"].dt.year >= min_year]
         after_count = len(df)
-        logger.info(f"Filtering historical records for baseline: kept {after_count}/{before_count} records from last {years_back} years (>= {min_year})")
+        logger.info(
+            f"Filtering historical records for baseline: kept {after_count}/{before_count} records from last {years_back} years (>= {min_year})")
     # Add month_day field
     df["month_day"] = df["record_date"].dt.strftime("%m-%d")
     # Group by month_day
-    logger.info(f"Computing baseline stats from {len(df)} historical records across {df['month_day'].nunique()} calendar days")
+    logger.info(
+        f"Computing baseline stats from {len(df)} historical records across {df['month_day'].nunique()} calendar days")
     agg = df.groupby("month_day")[value_field].agg(
         mean="mean",
         std="std",
