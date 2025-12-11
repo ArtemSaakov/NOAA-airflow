@@ -10,7 +10,6 @@ imported as needed,
 """
 from __future__ import annotations
 import os
-import json
 from datetime import datetime, timedelta
 from pathlib import Path
 import logging
@@ -21,7 +20,7 @@ try:
     from airflow import DAG
     from airflow.operators.python import PythonOperator
     AIRFLOW_AVAILABLE = True
-except Exception:
+except Exception:    # pragma: no cover - environment specific
     AIRFLOW_AVAILABLE = False
 
 
