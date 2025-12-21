@@ -5,8 +5,9 @@ installed in the development environment (e.g., when running unit tests).
 
 The DAG implementation uses small Python callables that call into the
 src.fetch and src.transform modules and writes intermediate CSVs to
-data/ so results can be inspected outside Airflow. Internal modules are only
-imported as needed, 
+data/ so results can be inspected outside Airflow. Internal modules and heavy
+imports are performed lazily inside task callables to keep things lightweight
+and streamlined, particularly for unit testing.
 """
 from __future__ import annotations
 import os
@@ -153,7 +154,7 @@ if AIRFLOW_AVAILABLE:  # pragma: no cover - runtime-only
 
         t_fetch_noaa >> t_fetch_nws >> t_merge_baseline
 
-else:  # Provide a safe fallback so importing this module in tests won't error
+else:  # Provide a safe fallback so importing this module in tests won't error out
     dag = None
     LOG.info(
         "Airflow not available; `dags/weather_pipeline.py` loaded in lightweight mode")
