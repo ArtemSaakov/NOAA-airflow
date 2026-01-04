@@ -13,7 +13,8 @@ def compute_baseline_stats(
     years_back: int | None = None
 ) -> pd.DataFrame:
     """
-    Given a list of HistoricalDailyRecord or dicts, compute baseline statistics by calendar day.
+    Given a list of HistoricalDailyRecord or dicts, compute baseline
+    statistics by calendar day.
     Returns DataFrame with columns: month_day, mean, std, q10, q90.
 
     Args:

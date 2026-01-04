@@ -40,7 +40,7 @@ def fetch_noaa_task(**context):
     """Fetch historical NOAA data and and  to CSV."""
     from src.fetch import noaa
 
-    # Default: last 30 days of data (can be overridden in a production DAG)
+    # Default: last 30 days of data (can be overridden as needed)
     end_date = datetime.now(datetime.UTC).isoformat()
     start_date = end_date - timedelta(days=30)
 
