@@ -15,8 +15,8 @@ Climatology Network - Daily (GHCND) dataset.
 - See _load_token() and get_token() for details
 
 **Retry Strategy:**
-- Exponential backoff (2-4-8 seconds) for retryable HTTP errors (429, 500, 502, 503, 504)
-- Non-retryable errors (401, 403, 404, etc.) raise immediately
+- Exponential backoff (2-4-8 seconds) for retriable HTTP errors (429, 500, 502, 503, 504)
+- Non-retriable errors (401, 403, 404, etc.) raise immediately
 - See ERRORS list and fetch_historical() for details
 """
 
@@ -32,13 +32,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_TOKEN_CACHE = ""
+
 NOAA_ENDPOINT = "https://www.ncei.noaa.gov/access/services/data/v1"
 # Default station ID: Detroit Metropolitan Airport weather station
 # Override via fetch_historical(station_id=...) for other locations
 NOAA_STATION_DEFAULT = "USW00094847"
 
 # HTTP status codes that warrant retry with exponential backoff
-RETRYABLE_ERRORS = [
+RETRIABLE_ERRORS = [
     HTTPStatus.TOO_MANY_REQUESTS,          # 429: Rate limit; aggressive backoff
     HTTPStatus.INTERNAL_SERVER_ERROR,      # 500: Server error; try again
     HTTPStatus.BAD_GATEWAY,                # 502: Temporary routing; try again
@@ -67,7 +69,7 @@ def _calculate_backoff_delay(attempt: int, error_code: HTTPStatus) -> int:
 
     Strategy:
         - 429 (rate limit): aggressive exponential backoff (3-6-12 seconds)
-        - Other retryable: gentle exponential backoff (2-4-8 seconds)
+        - Other retriable: gentle exponential backoff (2-4-8 seconds)
     """
     if error_code == HTTPStatus.TOO_MANY_REQUESTS:
         # Rate limit: back off aggressively
@@ -104,6 +106,8 @@ def _load_token() -> str:
         ) from e
 
 
+
+
 def get_token() -> str:
     """Get NOAA token (lazy loaded on first call)."""
     global _TOKEN_CACHE
@@ -112,10 +116,7 @@ def get_token() -> str:
     return _TOKEN_CACHE
 
 
-_TOKEN_CACHE = None
-
-
-def fetch_historical(start_date: str, end_date: str, token: str = None, station_id: str = None) -> list:
+def fetch_historical(start_date: str, end_date: str, token: str | None = None, station_id: str | None = None) -> list:
     """Fetch historical daily summaries from NOAA GHCND API.
 
     Args:
@@ -129,11 +130,11 @@ def fetch_historical(start_date: str, end_date: str, token: str = None, station_
         List of daily summary records from NOAA API
 
     Raises:
-        HTTPError: If API returns non-retryable error after retries
+        HTTPError: If API returns non-retriable error after retries
     """
-    if token is None:
+    if not token:
         token = get_token()
-    if station_id is None:
+    if not station_id:
         station_id = NOAA_STATION_DEFAULT
 
     params = {
@@ -159,17 +160,17 @@ def fetch_historical(start_date: str, end_date: str, token: str = None, station_
 
         except HTTPError as exc:
             code = exc.response.status_code
-            # Check if error is retryable
-            if code in RETRYABLE_ERRORS:
+            # Check if error is retriable
+            if code in RETRIABLE_ERRORS:
                 delay = _calculate_backoff_delay(n, HTTPStatus(code))
                 logger.warning(f"NOAA API returned {code}. Retrying in {delay}s "
                                f"(attempt {n+1}/{RETRIES})")
                 time.sleep(delay)
                 continue
 
-            # Fail-fast errors and other non-retryable errors
+            # Fail-fast errors and other non-retriable errors
             logger.error(
-                f"NOAA API returned non-retryable error {code}: {exc.response.text}")
+                f"NOAA API returned non-retriable error {code}: {exc.response.text}")
             raise
 
         except Exception as exc:

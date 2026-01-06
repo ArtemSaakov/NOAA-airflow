@@ -11,7 +11,7 @@ and streamlined, particularly for unit testing.
 """
 from __future__ import annotations
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import logging
 import pandas as pd
@@ -33,7 +33,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _iso_today() -> str:
-    return datetime.now(datetime.UTC).isoformat()
+    return datetime.now(timezone.utc).date().isoformat()
 
 
 def fetch_noaa_task(**context):
@@ -41,14 +41,14 @@ def fetch_noaa_task(**context):
     from src.fetch import noaa
 
     # Default: last 30 days of data (can be overridden as needed)
-    end_date = datetime.now(datetime.UTC).isoformat()
+    end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(days=30)
 
     LOG.info("Fetching NOAA historical data %s -> %s", start_date, end_date)
     data = noaa.fetch_historical(
         start_date=start_date.isoformat(), end_date=end_date.isoformat())
     df = noaa.process_historical(data)
-    # Normalize column names expected by downstream transforms
+    # Normalize column names expected by downstream transforms...
     #
     # process_historical returns `date` and `temp_avg` (°C)
     # Convert to schema-like dicts for easier downstream use
@@ -60,7 +60,7 @@ def fetch_noaa_task(**context):
     df["datatype"] = "TAVG"
     df["attributes"] = ""
     # Ensure record_date is ISO string
-    df["record_date"] = pd.to_datetime(df["record_date"]).dt.date
+    df["record_date"] = pd.to_datetime(df["record_date"]).dt.strftime("%m-%d")
     df.to_csv(out_path, index=False)
     LOG.info("Wrote NOAA historical CSV: %s", out_path)
 
@@ -119,7 +119,7 @@ def merge_and_baseline_task(**context):
 
     # Enrich merged with baseline (expects df_obs with date field; ensure a `date` exists)
     if "date" not in merged.columns:
-        merged["date"] = merged["timestamp"].dt.date
+        merged["date"] = pd.to_datetime(merged["timestamp"]).dt.date
 
     enriched = baseline_mod.enrich_with_baseline(merged, baseline_df, date_field="date", value_field=(
         "temperature_c" if "temperature_c" in merged.columns else "value"))

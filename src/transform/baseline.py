@@ -1,6 +1,6 @@
 import pandas as pd
 import logging
-from typing import List
+from typing import List, cast
 from src.schemas.historical import HistoricalDailyRecord
 
 logger = logging.getLogger(__name__)
@@ -31,11 +31,11 @@ def compute_baseline_stats(
         for rec in historical_records
     ]
     df = pd.DataFrame(records_data)
-    # Ensure record_date is datetime for operations
-    if pd.api.types.is_object_dtype(df["record_date"]):
-        df["record_date"] = pd.to_datetime(df["record_date"])
-    # Optionally restrict baseline to recent years to avoid long-term drift
-    if years_back is not None:
+    # Coerce record_date to datetime unconditionally with error handling
+    if "record_date" in df:
+        df["record_date"] = pd.to_datetime(df["record_date"], errors="coerce")
+    # Restricting baseline to recent years to avoid long-term drift
+    if years_back:
         # Determine the latest year present and compute cutoff
         max_year = df["record_date"].dt.year.max()
         min_year = int(max_year - years_back + 1)

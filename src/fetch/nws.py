@@ -12,8 +12,8 @@ This module fetches latest observations from NOAA's National Weather Service (NW
 - NWS API requires no authentication (public endpoint)
 
 **Retry Strategy:**
-- Exponential backoff (2-4-8 seconds) for retryable HTTP errors (429, 500, 502, 503, 504)
-- Non-retryable errors (401, 403, 404, etc.) raise immediately
+- Exponential backoff (2-4-8 seconds) for retriable HTTP errors (429, 500, 502, 503, 504)
+- Non-retriable errors (401, 403, 404, etc.) raise immediately
 """
 
 import requests as req
@@ -30,7 +30,7 @@ NWS_ENDPOINT = "https://api.weather.gov/stations/"
 NWS_STATION_DEFAULT = "KDTW"
 
 # HTTP status codes that warrant retry with exponential backoff
-RETRYABLE_ERRORS = [
+RETRIABLE_ERRORS = [
     HTTPStatus.TOO_MANY_REQUESTS,          # 429: Rate limit; aggressive backoff
     HTTPStatus.INTERNAL_SERVER_ERROR,      # 500: Server error; try again
     HTTPStatus.BAD_GATEWAY,                # 502: Temporary routing; try again
@@ -59,7 +59,7 @@ def _calculate_backoff_delay(attempt: int, error_code: HTTPStatus) -> int:
 
     Strategy:
         - 429 (rate limit): aggressive exponential backoff (3-6-12 seconds)
-        - Other retryable: gentle exponential backoff (2-4-8 seconds)
+        - Other retriable: gentle exponential backoff (2-4-8 seconds)
     """
     if error_code == HTTPStatus.TOO_MANY_REQUESTS:
         # Rate limit: back off aggressively
@@ -69,7 +69,7 @@ def _calculate_backoff_delay(attempt: int, error_code: HTTPStatus) -> int:
         return 2 * (2 ** attempt)  # 2, 4, 8 seconds
 
 
-def fetch_observations(station_id: str = None) -> dict:
+def fetch_observations(station_id: str | None = None) -> dict:
     """Fetch latest observations from NWS API.
 
     Args:
@@ -81,7 +81,7 @@ def fetch_observations(station_id: str = None) -> dict:
         temperature, wind_speed, wind_direction, and text_description (all SI units).
 
     Raises:
-        HTTPError: If API returns non-retryable error after retries
+        HTTPError: If API returns non-retriable error after retries
     """
     if station_id is None:
         station_id = NWS_STATION_DEFAULT
@@ -99,17 +99,17 @@ def fetch_observations(station_id: str = None) -> dict:
 
         except HTTPError as exc:
             code = exc.response.status_code
-            # Check if error is retryable
-            if code in RETRYABLE_ERRORS:
+            # Check if error is retriable
+            if code in RETRIABLE_ERRORS:
                 delay = _calculate_backoff_delay(n, HTTPStatus(code))
                 logger.warning(f"NWS API returned {code}. Retrying in {delay}s "
                                f"(attempt {n+1}/{RETRIES})")
                 time.sleep(delay)
                 continue
 
-            # Fail-fast errors and other non-retryable errors
+            # Error loggerogger
             logger.error(
-                f"NWS API returned non-retryable error {code}: {exc.response.text}")
+                f"NWS API returned non-retriable error {code}: {exc.response.text}")
             raise
 
         except Exception as exc:
