@@ -41,12 +41,12 @@ def merge_obs_and_hist(
         suffixes=("_obs", "_hist")
     )
     after_rows = len(merged)
-    # Log merge stats
+    # Log merge stats (include before/after counts)
     missing_matches = merged["mean"].isna().sum(
     ) if "mean" in merged.columns else None
     if missing_matches is not None:
         logger = __import__("logging").getLogger(__name__)
         logger.info(
-            f"Merged obs ({before_rows} rows) with hist; {missing_matches} rows had no historical match")
+            f"Merged obs ({before_rows} -> {after_rows} rows) with hist; {missing_matches} rows had no historical match")
 
     return merged

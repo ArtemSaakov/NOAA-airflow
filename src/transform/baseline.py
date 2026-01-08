@@ -1,13 +1,13 @@
 import pandas as pd
 import logging
-from typing import List, cast
+from typing import List
 from src.schemas.historical import HistoricalDailyRecord
 
 logger = logging.getLogger(__name__)
 
 
 def compute_baseline_stats(
-    historical_records: List,
+    historical_records: List[HistoricalDailyRecord | dict],
     value_field: str = "value",
     group_by: str = "month_day",
     years_back: int | None = None
@@ -27,7 +27,7 @@ def compute_baseline_stats(
     """
     # Convert list of records to DataFrame, handling both Pydantic models and dicts
     records_data = [
-        rec.model_dump() if hasattr(rec, 'model_dump') else rec
+        rec.model_dump() if isinstance(rec, HistoricalDailyRecord) else rec
         for rec in historical_records
     ]
     df = pd.DataFrame(records_data)
@@ -44,12 +44,21 @@ def compute_baseline_stats(
         after_count = len(df)
         logger.info(
             f"Filtering historical records for baseline: kept {after_count}/{before_count} records from last {years_back} years (>= {min_year})")
-    # Add month_day field
-    df["month_day"] = df["record_date"].dt.strftime("%m-%d")
-    # Group by month_day
+    # Ensure the grouping field exists. If it's missing and can be derived from
+    # `record_date` (the common case for `month_day`), create it. Otherwise
+    # raise a clear error so callers know to provide the column.
+    if group_by not in df:
+        if group_by == "month_day" and "record_date" in df:
+            df[group_by] = df["record_date"].dt.strftime("%m-%d")
+        else:
+            raise ValueError(
+                f"group_by='{group_by}' not present in records and cannot be derived from record_date"
+            )
+
+    # Group by the requested field
     logger.info(
-        f"Computing baseline stats from {len(df)} historical records across {df['month_day'].nunique()} calendar days")
-    agg = df.groupby("month_day")[value_field].agg(
+        f"Computing baseline stats from {len(df)} historical records across {df[group_by].nunique()} calendar groups (grouped by '{group_by}')")
+    agg = df.groupby(group_by)[value_field].agg(
         mean="mean",
         std="std",
         q10=lambda x: x.quantile(0.10),
