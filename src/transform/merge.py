@@ -5,7 +5,7 @@ from typing import List, Union
 
 
 def records_to_df(
-    records: List[Union[ObservationRecord, HistoricalDailyRecord]]
+    records: List[Union[ObservationRecord, HistoricalDailyRecord]],
 ) -> pd.DataFrame:
     """
     Convert list of Pydantic models (ObservationRecord or HistoricalDailyRecord)
@@ -18,7 +18,7 @@ def merge_obs_and_hist(
     obs_df: pd.DataFrame,
     hist_df: pd.DataFrame,
     obs_date_field: str = "timestamp",
-    hist_date_field: str = "record_date"
+    hist_date_field: str = "record_date",
 ) -> pd.DataFrame:
     """
     Merge observations DataFrame and historical daily summary DataFrame
@@ -30,23 +30,20 @@ def merge_obs_and_hist(
     obs["month_day"] = obs["date"].apply(lambda d: d.strftime("%m-%d"))
 
     hist = hist_df.copy()
-    hist["month_day"] = hist[hist_date_field].apply(
-        lambda d: d.strftime("%m-%d"))
+    hist["month_day"] = hist[hist_date_field].apply(lambda d: d.strftime("%m-%d"))
 
     before_rows = len(obs)
     merged = obs.merge(
-        hist,
-        how="left",
-        on=["station_id", "month_day"],
-        suffixes=("_obs", "_hist")
+        hist, how="left", on=["station_id", "month_day"], suffixes=("_obs", "_hist")
     )
     after_rows = len(merged)
     # Log merge stats (include before/after counts)
-    missing_matches = merged["mean"].isna().sum(
-    ) if "mean" in merged.columns else None
+    missing_matches = merged["mean"].isna().sum() if "mean" in merged.columns else None
     if missing_matches is not None:
         logger = __import__("logging").getLogger(__name__)
         logger.info(
-            f"Merged obs ({before_rows} -> {after_rows} rows) with hist; {missing_matches} rows had no historical match")
+            f"""Merged obs ({before_rows} -> {after_rows} rows) with hist;
+            {missing_matches} rows had no historical match"""
+        )
 
     return merged

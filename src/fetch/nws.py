@@ -31,18 +31,18 @@ NWS_STATION_DEFAULT = "KDTW"
 
 # HTTP status codes that warrant retry with exponential backoff
 RETRIABLE_ERRORS = [
-    HTTPStatus.TOO_MANY_REQUESTS,          # 429: Rate limit; aggressive backoff
-    HTTPStatus.INTERNAL_SERVER_ERROR,      # 500: Server error; try again
-    HTTPStatus.BAD_GATEWAY,                # 502: Temporary routing; try again
-    HTTPStatus.SERVICE_UNAVAILABLE,        # 503: Service overloaded; try again
-    HTTPStatus.GATEWAY_TIMEOUT,            # 504: Timeout; try again
+    HTTPStatus.TOO_MANY_REQUESTS,  # 429: Rate limit; aggressive backoff
+    HTTPStatus.INTERNAL_SERVER_ERROR,  # 500: Server error; try again
+    HTTPStatus.BAD_GATEWAY,  # 502: Temporary routing; try again
+    HTTPStatus.SERVICE_UNAVAILABLE,  # 503: Service overloaded; try again
+    HTTPStatus.GATEWAY_TIMEOUT,  # 504: Timeout; try again
 ]
 # HTTP status codes that should fail fast (no retry)
 FAIL_FAST_ERRORS = [
-    HTTPStatus.UNAUTHORIZED,               # 401: Invalid token; never retries
-    HTTPStatus.FORBIDDEN,                  # 403: Access denied; never retries
-    HTTPStatus.NOT_FOUND,                  # 404: Endpoint doesn't exist; never retries
-    HTTPStatus.BAD_REQUEST,                # 400: Malformed request; never retries
+    HTTPStatus.UNAUTHORIZED,  # 401: Invalid token; never retries
+    HTTPStatus.FORBIDDEN,  # 403: Access denied; never retries
+    HTTPStatus.NOT_FOUND,  # 404: Endpoint doesn't exist; never retries
+    HTTPStatus.BAD_REQUEST,  # 400: Malformed request; never retries
 ]
 RETRIES = 3
 
@@ -63,10 +63,10 @@ def _calculate_backoff_delay(attempt: int, error_code: HTTPStatus) -> int:
     """
     if error_code == HTTPStatus.TOO_MANY_REQUESTS:
         # Rate limit: back off aggressively
-        return 3 * (2 ** attempt)  # 3, 6, 12 seconds
+        return 3 * (2**attempt)  # 3, 6, 12 seconds
     else:
         # Other server errors: gentle backoff
-        return 2 * (2 ** attempt)  # 2, 4, 8 seconds
+        return 2 * (2**attempt)  # 2, 4, 8 seconds
 
 
 def fetch_observations(station_id: str | None = None) -> dict:
@@ -93,8 +93,7 @@ def fetch_observations(station_id: str | None = None) -> dict:
             resp = req.get(url, headers={"Accept": "application/ld+json"})
             resp.raise_for_status()
             data = resp.json()
-            logger.info(
-                f"Successfully fetched latest observation for {station_id}")
+            logger.info(f"Successfully fetched latest observation for {station_id}")
             return data
 
         except HTTPError as exc:
@@ -102,19 +101,23 @@ def fetch_observations(station_id: str | None = None) -> dict:
             # Check if error is retriable
             if code in RETRIABLE_ERRORS:
                 delay = _calculate_backoff_delay(n, HTTPStatus(code))
-                logger.warning(f"NWS API returned {code}. Retrying in {delay}s "
-                               f"(attempt {n+1}/{RETRIES})")
+                logger.warning(
+                    f"NWS API returned {code}. Retrying in {delay}s "
+                    f"(attempt {n+1}/{RETRIES})"
+                )
                 time.sleep(delay)
                 continue
 
-            # Error loggerogger
+            # Error logger for non-retriable errors
             logger.error(
-                f"NWS API returned non-retriable error {code}: {exc.response.text}")
+                f"NWS API returned non-retriable error {code}: {exc.response.text}"
+            )
             raise
 
         except Exception as exc:
             logger.error(
-                f"Unexpected error fetching from NWS (attempt {n+1}/{RETRIES}): {exc}")
+                f"Unexpected error fetching from NWS (attempt {n+1}/{RETRIES}): {exc}"
+            )
             if n == RETRIES - 1:
                 raise
             time.sleep(2 ** (n + 1))
@@ -143,10 +146,8 @@ def parse_observation_json(obs_data: dict) -> dict:
     temp_obj = props.get("temperature", {})
     wind_obj = props.get("windSpeed", {})
 
-    temperature_c = temp_obj.get(
-        "value") if isinstance(temp_obj, dict) else None
-    wind_speed_m_s = wind_obj.get(
-        "value") if isinstance(wind_obj, dict) else None
+    temperature_c = temp_obj.get("value") if isinstance(temp_obj, dict) else None
+    wind_speed_m_s = wind_obj.get("value") if isinstance(wind_obj, dict) else None
 
     return {
         "timestamp": props.get("timestamp"),

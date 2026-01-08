@@ -41,18 +41,18 @@ NOAA_STATION_DEFAULT = "USW00094847"
 
 # HTTP status codes that warrant retry with exponential backoff
 RETRIABLE_ERRORS = [
-    HTTPStatus.TOO_MANY_REQUESTS,          # 429: Rate limit; aggressive backoff
-    HTTPStatus.INTERNAL_SERVER_ERROR,      # 500: Server error; try again
-    HTTPStatus.BAD_GATEWAY,                # 502: Temporary routing; try again
-    HTTPStatus.SERVICE_UNAVAILABLE,        # 503: Service overloaded; try again
-    HTTPStatus.GATEWAY_TIMEOUT,            # 504: Timeout; try again
+    HTTPStatus.TOO_MANY_REQUESTS,  # 429: Rate limit; aggressive backoff
+    HTTPStatus.INTERNAL_SERVER_ERROR,  # 500: Server error; try again
+    HTTPStatus.BAD_GATEWAY,  # 502: Temporary routing; try again
+    HTTPStatus.SERVICE_UNAVAILABLE,  # 503: Service overloaded; try again
+    HTTPStatus.GATEWAY_TIMEOUT,  # 504: Timeout; try again
 ]
 # HTTP status codes that should fail fast (no retry)
 FAIL_FAST_ERRORS = [
-    HTTPStatus.UNAUTHORIZED,               # 401: Invalid token; never retries
-    HTTPStatus.FORBIDDEN,                  # 403: Access denied; never retries
-    HTTPStatus.NOT_FOUND,                  # 404: Endpoint doesn't exist; never retries
-    HTTPStatus.BAD_REQUEST,                # 400: Malformed request; never retries
+    HTTPStatus.UNAUTHORIZED,  # 401: Invalid token; never retries
+    HTTPStatus.FORBIDDEN,  # 403: Access denied; never retries
+    HTTPStatus.NOT_FOUND,  # 404: Endpoint doesn't exist; never retries
+    HTTPStatus.BAD_REQUEST,  # 400: Malformed request; never retries
 ]
 RETRIES = 3
 
@@ -73,10 +73,10 @@ def _calculate_backoff_delay(attempt: int, error_code: HTTPStatus) -> int:
     """
     if error_code == HTTPStatus.TOO_MANY_REQUESTS:
         # Rate limit: back off aggressively
-        return 3 * (2 ** attempt)  # 3, 6, 12 seconds
+        return 3 * (2**attempt)  # 3, 6, 12 seconds
     else:
         # Other server errors: gentle backoff
-        return 2 * (2 ** attempt)  # 2, 4, 8 seconds
+        return 2 * (2**attempt)  # 2, 4, 8 seconds
 
 
 def _load_token() -> str:
@@ -106,8 +106,6 @@ def _load_token() -> str:
         ) from e
 
 
-
-
 def get_token() -> str:
     """Get NOAA token (lazy loaded on first call)."""
     global _TOKEN_CACHE
@@ -116,7 +114,12 @@ def get_token() -> str:
     return _TOKEN_CACHE
 
 
-def fetch_historical(start_date: str, end_date: str, token: str | None = None, station_id: str | None = None) -> list:
+def fetch_historical(
+    start_date: str,
+    end_date: str,
+    token: str | None = None,
+    station_id: str | None = None,
+) -> list:
     """Fetch historical daily summaries from NOAA GHCND API.
 
     Args:
@@ -146,16 +149,17 @@ def fetch_historical(start_date: str, end_date: str, token: str | None = None, s
         "includeAttributes": "true",
     }
 
-    headers = {"token": token,
-               "Accept": "application/json"}
+    headers = {"token": token, "Accept": "application/json"}
 
     for n in range(RETRIES):
         try:
             resp = req.get(NOAA_ENDPOINT, headers=headers, params=params)
             resp.raise_for_status()
             data = resp.json().get("results", [])
-            logger.info(f"Successfully fetched {len(data)} records from NOAA for {station_id} "
-                        f"({start_date} to {end_date})")
+            logger.info(
+                f"Successfully fetched {len(data)} records from NOAA for {station_id} "
+                f"({start_date} to {end_date})"
+            )
             return data
 
         except HTTPError as exc:
@@ -163,19 +167,23 @@ def fetch_historical(start_date: str, end_date: str, token: str | None = None, s
             # Check if error is retriable
             if code in RETRIABLE_ERRORS:
                 delay = _calculate_backoff_delay(n, HTTPStatus(code))
-                logger.warning(f"NOAA API returned {code}. Retrying in {delay}s "
-                               f"(attempt {n+1}/{RETRIES})")
+                logger.warning(
+                    f"NOAA API returned {code}. Retrying in {delay}s "
+                    f"(attempt {n+1}/{RETRIES})"
+                )
                 time.sleep(delay)
                 continue
 
             # Fail-fast errors and other non-retriable errors
             logger.error(
-                f"NOAA API returned non-retriable error {code}: {exc.response.text}")
+                f"NOAA API returned non-retriable error {code}: {exc.response.text}"
+            )
             raise
 
         except Exception as exc:
             logger.error(
-                f"Unexpected error fetching from NOAA (attempt {n+1}/{RETRIES}): {exc}")
+                f"Unexpected error fetching from NOAA (attempt {n+1}/{RETRIES}): {exc}"
+            )
             if n == RETRIES - 1:
                 raise
             time.sleep(2 ** (n + 1))
@@ -212,6 +220,5 @@ def process_historical(data: list[dict]) -> pd.DataFrame:
     # IMPORTANT: convert TAVG from tenths of degrees C to degrees C
     # NOAA GHCND API returns all temperature values as 10x their actual value
     # Example: 225 in raw data = 22.5°C after conversion
-    df["temp_avg"] = df["temp_avg"].apply(
-        lambda x: x / 10 if pd.notnull(x) else x)
+    df["temp_avg"] = df["temp_avg"].apply(lambda x: x / 10 if pd.notnull(x) else x)
     return df
