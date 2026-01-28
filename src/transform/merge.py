@@ -25,12 +25,14 @@ def merge_obs_and_hist(
     on station_id and day-of-year (month-day). Returns merged DataFrame.
     """
     obs = obs_df.copy()
-    # Convert obs timestamp to date
-    obs["date"] = obs[obs_date_field].dt.date
-    obs["month_day"] = obs["date"].apply(lambda d: d.strftime("%m-%d"))
+    # Convert obs timestamp to date and extract month-day
+    obs["date"] = pd.to_datetime(obs[obs_date_field])
+    obs["month_day"] = obs["date"].dt.strftime("%m-%d")
 
     hist = hist_df.copy()
-    hist["month_day"] = hist[hist_date_field].apply(lambda d: d.strftime("%m-%d"))
+    # Ensure hist date field is datetime, then extract month-day
+    hist[hist_date_field] = pd.to_datetime(hist[hist_date_field])
+    hist["month_day"] = hist[hist_date_field].dt.strftime("%m-%d")
 
     before_rows = len(obs)
     merged = obs.merge(

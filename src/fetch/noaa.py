@@ -155,7 +155,12 @@ def fetch_historical(
         try:
             resp = req.get(NOAA_ENDPOINT, headers=headers, params=params)
             resp.raise_for_status()
-            data = resp.json().get("results", [])
+            json_response = resp.json()
+            # Handle both dict response with "results" key and direct list response
+            if isinstance(json_response, dict):
+                data = json_response.get("results", [])
+            else:
+                data = json_response
             logger.info(
                 f"Successfully fetched {len(data)} records from NOAA for {station_id} "
                 f"({start_date} to {end_date})"
@@ -220,5 +225,5 @@ def process_historical(data: list[dict]) -> pd.DataFrame:
     # IMPORTANT: convert TAVG from tenths of degrees C to degrees C
     # NOAA GHCND API returns all temperature values as 10x their actual value
     # Example: 225 in raw data = 22.5°C after conversion
-    df["temp_avg"] = df["temp_avg"].apply(lambda x: x / 10 if pd.notnull(x) else x)
+    df["temp_avg"] = df["temp_avg"].apply(lambda x: int(x) / 10 if pd.notnull(x) else x)
     return df

@@ -40,9 +40,5 @@ class HistoricalDailyRecord(BaseModel):
             raise ValueError(f"datatype must be one of {allowed_types}, got {v}")
         return v
 
-    @field_validator("value", mode="after")
-    @classmethod
-    def confirm_non_negative(cls, v: float, info: ValidationInfo) -> float:
-        if v < 0:
-            raise ValueError(f"{info.field_name} must be non-negative, got {v}")
-        return v
+    # Note: No validation for non-negative values since temperatures can be negative in Celsius
+    # Precipitation, snow, etc. should be non-negative but we're not enforcing that here

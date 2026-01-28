@@ -61,8 +61,7 @@ def fetch_noaa_task(**context):
     df["station_id"] = os.environ.get("NOAA_STATION", noaa.NOAA_STATION_DEFAULT)
     df["datatype"] = "TAVG"
     df["attributes"] = ""
-    # Ensure record_date is ISO string
-    df["record_date"] = pd.to_datetime(df["record_date"]).dt.strftime("%m-%d")
+    # Keep record_date as-is (will be converted to date type in merge_and_baseline_task)
     df.to_csv(out_path, index=False)
     LOG.info("Wrote NOAA historical CSV: %s", out_path)
 
@@ -107,8 +106,11 @@ def merge_and_baseline_task(**context):
     nws_df = pd.read_csv(nws_files[-1])
 
     # Prepare dataframes to match transform expectations
-    # Historical: record_date -> datetime
-    noaa_df["record_date"] = pd.to_datetime(noaa_df["record_date"]).dt.date
+    # Historical: record_date -> datetime (keep as datetime for validation)
+    noaa_df["record_date"] = pd.to_datetime(noaa_df["record_date"])
+    # Handle NaN in attributes column
+    if "attributes" in noaa_df.columns:
+        noaa_df["attributes"] = noaa_df["attributes"].fillna("")
     # Observations: timestamp -> datetime
     if "timestamp" in nws_df.columns:
         nws_df["timestamp"] = pd.to_datetime(nws_df["timestamp"])
@@ -134,26 +136,18 @@ def merge_and_baseline_task(**context):
             if isinstance(record.get("value"), str):
                 record["value"] = float(record["value"])
 
-            # Normalize `record_date` to a month-day string ("%m-%d"):
-            # - Downstream logic and the Historical schema use the calendar-day
-            #   string (e.g. "01-15") as the canonical key for baselines.
-            # - `noaa_df.to_dict()` can produce `record_date` values as
-            #   `datetime.date`, `Timestamp`, or already a string. Convert
-            #   non-strings to the expected "%m-%d" format. If the value is
-            #   missing (`None`) set an empty string so the schema sees a
-            #   stable (string) value instead of `None`.
+            # Normalize `record_date` to datetime:
+            # - Schema expects date or datetime type
+            # - Convert pandas Timestamp to Python date for validation
             rd = record.get("record_date")
-            if not isinstance(rd, str):
+            if pd.notna(rd):
                 try:
-                    if rd is not None:
-                        record["record_date"] = pd.to_datetime(rd).strftime("%m-%d")
-                    else:
-                        record["record_date"] = ""
+                    record["record_date"] = pd.to_datetime(rd).date()
                 except Exception:
-                    # Fallback to a string representation if parsing fails;
-                    # this keeps the record mappable into the Pydantic model
-                    # rather than raising here.
-                    record["record_date"] = str(rd)
+                    # Skip invalid dates
+                    continue
+            else:
+                continue
 
             # Coerce mapping keys to strings before using `**rec`:
             # - Python's `**` expansion requires the mapping to have `str`
