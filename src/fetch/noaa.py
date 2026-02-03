@@ -10,8 +10,7 @@ Climatology Network - Daily (GHCND) dataset.
 - Supported datatypes: TMAX, TMIN, TAVG, PRCP, SNOW, SNWD (defined in HistoricalDailyRecord schema)
 
 **Credentials:**
-- Token loaded from NOAA_TOKEN environment variable (preferred)
-- Falls back to cred.json file in project root (loaded lazily, on first API call)
+- Token loaded from NOAA_TOKEN environment variable
 - See _load_token() and get_token() for details
 
 **Retry Strategy:**
@@ -24,8 +23,6 @@ import requests as req
 from requests.exceptions import HTTPError
 import time
 from http import HTTPStatus
-import json
-from pathlib import Path
 import pandas as pd
 import os
 import logging
@@ -80,30 +77,16 @@ def _calculate_backoff_delay(attempt: int, error_code: HTTPStatus) -> int:
 
 
 def _load_token() -> str:
-    """Load NOAA token from environment variable or cred.json file.
+    """Load NOAA token from environment variable.
 
-    Tries environment variable NOAA_TOKEN first, then falls back to cred.json.
-    Raises ValueError if token cannot be loaded.
+    Raises ValueError if NOAA_TOKEN is not set.
     """
-    # Try environment variable first
     token = os.environ.get("NOAA_TOKEN")
     if token:
         logger.info("Loaded NOAA token from environment variable")
         return token
 
-    # Fall back to cred.json method:
-    # Utilizes file named cred.json in project root
-    # and expects JSON keyword 'token'
-    try:
-        cred_path = Path(__file__).parent.parent.parent / "cred.json"
-        token = json.loads(cred_path.read_text())["token"]
-        logger.info(f"Loaded NOAA token from {cred_path}")
-        return token
-    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-        raise ValueError(
-            f"Could not load NOAA token. Set NOAA_TOKEN environment variable "
-            f"or ensure {cred_path} exists with valid JSON containing 'token' key"
-        ) from e
+    raise ValueError("Could not load NOAA token. Set NOAA_TOKEN environment variable")
 
 
 def get_token() -> str:
