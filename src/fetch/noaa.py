@@ -1,4 +1,4 @@
-"""NOAA GHCND API fetcher with retry logic and credential management.
+"""National Oceanic and Atmospheric Administration (NOAA) Global Historical Climatology Network - Daily (GHCND) API fetcher with retry logic and credential management.
 
 This module fetches historical daily weather summaries from NOAA's Global Historical
 Climatology Network - Daily (GHCND) dataset.

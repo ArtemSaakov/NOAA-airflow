@@ -1,5 +1,4 @@
 .vscode
-.github
 airflow-venv
 logs
 config
