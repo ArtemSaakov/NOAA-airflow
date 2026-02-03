@@ -21,6 +21,8 @@ def compute_baseline_stats(
         historical_records: List of HistoricalDailyRecord or dicts with record_date and value
         value_field: Name of field containing the values to aggregate
         group_by: Field name to group by (will be created from record_date if needed)
+        years_back: If set, restrict historical records to the most recent N
+        number of years to compute baseline.
 
     Returns:
         DataFrame with columns: month_day, mean, std, q10, q90

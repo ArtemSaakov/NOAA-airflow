@@ -1,9 +1,8 @@
-cred.json
 .vscode
-.github
 airflow-venv
 logs
 config
 data
 .env
 __pycache__/
+.pytest_cache/

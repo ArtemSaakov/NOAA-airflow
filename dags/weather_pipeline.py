@@ -138,7 +138,7 @@ def merge_and_baseline_task(**context):
 
             # Normalize `record_date` to datetime:
             # - Schema expects date or datetime type
-            # - Convert pandas Timestamp to Python date for validation
+            # - Convert pandas timestamp to Python date for validation
             rd = record.get("record_date")
             if pd.notna(rd):
                 try:
@@ -153,9 +153,10 @@ def merge_and_baseline_task(**context):
             # - Python's `**` expansion requires the mapping to have `str`
             #   keys because they become keyword argument names when calling
             #   a function/class. DataFrame-derived dicts can have non-str
-            #   keys (dates, ints, etc.). Convert every key with `str(k)` to
+            #   keys (dates, ints, etc.). We convert every key with `str(k)` to
             #   ensure `HistoricalDailyRecord(**rec)` does not raise
-            #   "Argument expression after ** must be a mapping with a \"str\" key type".
+            #   "Argument expression after ** must be a mapping with a \"str\"
+            #   key type".
             rec = {str(k): v for k, v in dict(record).items()}
             hist_records.append(HistoricalDailyRecord(**rec))
         except Exception as e:
@@ -163,7 +164,7 @@ def merge_and_baseline_task(**context):
             continue
     baseline_df = baseline_mod.compute_baseline_stats(hist_records, value_field="value")
 
-    # Enrich merged with baseline (expects df_obs with date field; ensure a `date` exists)
+    # Enrich merged with baseline (expects df_obs with date field—ensure a `date` exists)
     if "date" not in merged.columns:
         merged["date"] = pd.to_datetime(merged["timestamp"]).dt.date
 
@@ -205,9 +206,9 @@ if AIRFLOW_AVAILABLE:  # pragma: no cover - runtime-only
             task_id="merge_and_baseline", python_callable=merge_and_baseline_task
         )
 
-        t_fetch_noaa >> t_fetch_nws >> t_merge_baseline
+        t_fetch_noaa >> t_fetch_nws >> t_merge_baseline  # type: ignore[operator]
 
-else:  # Provide a safe fallback so importing this module in tests won't error out
+else:  # Intended as a fallback so importing this module in tests won't error out
     dag = None
     LOG.info(
         "Airflow not available; `dags/weather_pipeline.py` loaded in lightweight mode"
