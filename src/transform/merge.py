@@ -1,3 +1,11 @@
+"""Utilities for merging observations with historical baselines.
+
+This module converts Pydantic records to DataFrames and joins live NWS
+observations with NOAA historical stats by station and calendar day.
+It standardizes dates to month-day keys and reports merge coverage when
+historical matches are missing.
+"""
+
 import pandas as pd
 from src.schemas.observation import ObservationRecord
 from src.schemas.historical import HistoricalDailyRecord
