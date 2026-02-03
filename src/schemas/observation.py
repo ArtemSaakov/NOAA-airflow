@@ -1,3 +1,18 @@
+"""Pydantic schema for National Weather Service (NWS) real-time observation records.
+
+This module defines the canonical structure for live observations ingested
+from the NWS API. It enforces required fields, forbids unknown keys, and
+validates that numeric measurements are non-negative when provided.
+
+**Key Behaviors:**
+- Rejects extra fields via `extra="forbid"`
+- Ensures `temperature_c` and `wind_speed_m_s` are >= 0 when present
+- Emits JSON schema metadata for documentation and testing
+
+**Usage:**
+- Records are parsed after fetch-layer normalization to UTC timestamps
+"""
+
 from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator, ValidationInfo
