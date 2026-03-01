@@ -5,7 +5,9 @@ from src.schemas.historical import HistoricalDailyRecord
 from src.schemas.observation import ObservationRecord
 
 
+# Tests for ObservationRecord schema
 def test_observation_valid():
+    # Verify valid observation record passes validation
     obs = ObservationRecord(
         station_id="KDTW",
         timestamp=datetime(2025, 10, 18, 12, 34, 56),
@@ -17,6 +19,7 @@ def test_observation_valid():
 
 
 def test_observation_invalid_negative_wind():
+    # Verify negative wind speed raises validation error
     with pytest.raises(ValidationError):
         ObservationRecord(
             station_id="KDTW",
@@ -26,7 +29,9 @@ def test_observation_invalid_negative_wind():
         )
 
 
+# Tests for HistoricalDailyRecord schema
 def test_historical_valid():
+    # Verify valid historical record passes validation
     hist = HistoricalDailyRecord(
         station_id="USW00094847",
         record_date=date(2025, 10, 17),
@@ -39,6 +44,7 @@ def test_historical_valid():
 
 
 def test_historical_invalid_datatype():
+    # Verify invalid datatype raises validation error
     with pytest.raises(ValidationError):
         HistoricalDailyRecord(
             station_id="USW00094847",
@@ -50,6 +56,7 @@ def test_historical_invalid_datatype():
 
 
 def test_historical_value_negative_when_precip():
+    # Verify negative precipitation value raises validation error
     with pytest.raises(ValidationError):
         HistoricalDailyRecord(
             station_id="USW00094847",

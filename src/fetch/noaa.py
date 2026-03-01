@@ -92,7 +92,7 @@ def _load_token() -> str:
 def get_token() -> str:
     """Get NOAA token (lazy loaded on first call)."""
     global _TOKEN_CACHE
-    if "_TOKEN_CACHE" not in globals():
+    if not _TOKEN_CACHE:
         _TOKEN_CACHE = _load_token()
     return _TOKEN_CACHE
 
@@ -198,9 +198,20 @@ def process_historical(data: list[dict]) -> pd.DataFrame:
         Rows with missing TAVG values are preserved with NaN in temp_avg
 
     Raises:
-        KeyError: If expected columns (DATE, TAVG) are missing from input
+        ValueError: If DATE column is missing or no records have TAVG data
     """
     df = pd.DataFrame(data)
+
+    # Check for required columns
+    if "DATE" not in df.columns:
+        raise ValueError("NOAA API response missing DATE column")
+
+    if "TAVG" not in df.columns:
+        logger.warning(
+            "NOAA API response missing TAVG column; returning empty DataFrame"
+        )
+        return pd.DataFrame(columns=["date", "temp_avg"])
+
     # keep only date and tavg columns
     df = df[["DATE", "TAVG"]]
     # rename columns

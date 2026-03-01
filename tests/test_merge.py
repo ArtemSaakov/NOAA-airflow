@@ -8,6 +8,7 @@ from src.schemas.historical import HistoricalDailyRecord
 
 @pytest.fixture
 def obs_model():
+    """Sample observation record for testing."""
     return ObservationRecord(
         station_id="USW00094847",
         timestamp=datetime(2025, 10, 17, 12, 0, 0),
@@ -18,6 +19,7 @@ def obs_model():
 
 @pytest.fixture
 def hist_model():
+    """Sample historical daily record for testing."""
     return HistoricalDailyRecord(
         station_id="USW00094847",
         record_date=date(2025, 10, 17),
@@ -27,7 +29,9 @@ def hist_model():
     )
 
 
+# Tests for records_to_df
 def test_records_to_df_list(obs_model, hist_model):
+    # Verify Pydantic models convert to DataFrames properly
     df_obs = records_to_df([obs_model])
     df_hist = records_to_df([hist_model])
     assert isinstance(df_obs, pd.DataFrame)
@@ -38,7 +42,9 @@ def test_records_to_df_list(obs_model, hist_model):
     assert "datatype" in df_hist.columns
 
 
+# Tests for merge_obs_and_hist
 def test_merge_obs_and_hist_merge(obs_model, hist_model):
+    # Verify observation and historical data merge correctly with month_day field
     df_obs = records_to_df([obs_model])
     df_hist = records_to_df([hist_model])
     merged = merge_obs_and_hist(

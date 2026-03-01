@@ -7,7 +7,7 @@ keys, and constrains `datatype` to the supported GHCND codes.
 **Key Behaviors:**
 - Rejects extra fields via `extra="forbid"`
 - Validates `datatype` against: TMAX, TMIN, TAVG, PRCP, SNOW, SNWD
-- Leaves value ranges unvalidated to allow negative temperatures
+- Leaves value ranges invalidated to allow negative temperatures
 
 **Usage:**
 - Models are used after fetch-layer conversions (e.g., TAVG in °C)
@@ -69,5 +69,14 @@ class HistoricalDailyRecord(BaseModel):
         # Return validated datatype
         return v
 
-    # Note: No validation for non-negative values since temperatures can be negative in Celsius
-    # Precipitation, snow, etc. should be non-negative but we're not enforcing that here
+    # Validate that precipitation and snow values are non-negative
+    @field_validator("value", mode="after")
+    @classmethod
+    def validate_non_negative_precip(cls, v: float, info) -> float:
+        # Get the datatype from validation context
+        datatype = info.data.get("datatype")
+        # Precipitation, snow, and snow depth cannot be negative
+        non_negative_types = {"PRCP", "SNOW", "SNWD"}
+        if datatype in non_negative_types and v < 0:
+            raise ValueError(f"{datatype} value cannot be negative, got {v}")
+        return v

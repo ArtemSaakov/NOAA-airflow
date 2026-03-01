@@ -33,11 +33,20 @@ def compute_baseline_stats(
         for rec in historical_records
     ]
     df = pd.DataFrame(records_data)
+
+    # Handle empty DataFrame
+    if df.empty:
+        logger.warning(
+            "No historical records provided to compute_baseline_stats; returning empty DataFrame"
+        )
+        return pd.DataFrame(columns=[group_by, "mean", "std", "q10", "q90"])
+
     # Coerce record_date to datetime unconditionally with error handling
     if "record_date" in df:
         df["record_date"] = pd.to_datetime(df["record_date"], errors="coerce")
+
     # Restricting baseline to recent years to avoid long-term drift
-    if years_back:
+    if years_back and "record_date" in df:
         # Determine the latest year present and compute cutoff
         max_year = df["record_date"].dt.year.max()
         min_year = int(max_year - years_back + 1)
@@ -47,6 +56,7 @@ def compute_baseline_stats(
         logger.info(
             f"Filtering historical records for baseline: kept {after_count}/{before_count} records from last {years_back} years (>= {min_year})"
         )
+
     # Ensure the grouping field exists. If it's missing and can be derived from
     # `record_date` (the common case for `month_day`), create it. Otherwise
     # raise a clear error so callers know to provide the column.
@@ -55,7 +65,7 @@ def compute_baseline_stats(
             df[group_by] = df["record_date"].dt.strftime("%m-%d")
         else:
             raise ValueError(
-                f"group_by='{group_by}' not present in records and cannot be derived from record_date"
+                f"group_by='{group_by}' not present in records and cannot be derived from record_date. Available columns: {list(df.columns)}"
             )
 
     # Group by the requested field

@@ -6,7 +6,10 @@ from src.transform.baseline import compute_baseline_stats, enrich_with_baseline
 
 @pytest.fixture
 def sample_hist_records():
-    # Create sample historical data as dicts (mimicking parsed records)
+    """Sample historical records for baseline computation.
+
+    Contains 3 years of TMAX data for two dates (10-17 and 10-18).
+    """
     return [
         {
             "station_id": "USW00094847",
@@ -55,6 +58,7 @@ def sample_hist_records():
 
 @pytest.fixture
 def sample_obs_df():
+    """Sample observation DataFrame with two dates."""
     data = [
         {"date": pd.to_datetime("2025-10-17"), "value": 11.0},
         {"date": pd.to_datetime("2025-10-18"), "value": 15.5},
@@ -62,7 +66,9 @@ def sample_obs_df():
     return pd.DataFrame(data)
 
 
+# Tests for compute_baseline_stats
 def test_compute_baseline_stats_structure(sample_hist_records):
+    # Verify output structure has correct columns
     agg = compute_baseline_stats(
         historical_records=sample_hist_records,
         value_field="value",
@@ -74,6 +80,7 @@ def test_compute_baseline_stats_structure(sample_hist_records):
 
 
 def test_compute_baseline_stats_values(sample_hist_records):
+    # Verify computed statistics match expected values
     agg = compute_baseline_stats(
         historical_records=sample_hist_records,
         value_field="value",
@@ -89,7 +96,9 @@ def test_compute_baseline_stats_values(sample_hist_records):
     assert 11.5 <= row["q90"] <= 12.0  # Linear interpolation gives ~11.6
 
 
+# Tests for enrich_with_baseline
 def test_enrich_with_baseline_anomaly_added(sample_obs_df, sample_hist_records):
+    # Verify anomaly_z column is added with sensible values
     baseline = compute_baseline_stats(
         historical_records=sample_hist_records,
         value_field="value",
