@@ -30,7 +30,7 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-ENV_LOADED = load_dotenv()
+load_dotenv()
 
 _TOKEN_CACHE = ""
 
@@ -84,15 +84,12 @@ def _load_token() -> str:
 
     Raises ValueError if NOAA_TOKEN is not set.
     """
-    if ENV_LOADED:
-        token = os.environ.get("NOAA_TOKEN")
-        if token:
-            logger.info("Loaded NOAA token from environment variable")
-            return token
+    token = os.environ.get("NOAA_TOKEN")
+    if token:
+        logger.info("Found NOAA token in environment variable")
+        return token
 
-        raise ValueError("Could not load NOAA token. Set NOAA_TOKEN environment variable")
-    else:
-        raise ValueError("Could not load environment variables from .env file")
+    raise ValueError("Could not load NOAA token. Set NOAA_TOKEN environment variable")
 
 
 def get_token() -> str:
