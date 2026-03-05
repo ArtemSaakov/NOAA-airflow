@@ -90,7 +90,7 @@ def fetch_observations(station_id: str | None = None) -> dict:
 
     for n in range(RETRIES):
         try:
-            resp = req.get(url, headers={"Accept": "application/ld+json"})
+            resp = req.get(url, headers={"Accept": "application/geo+json"})
             resp.raise_for_status()
             data = resp.json()
             logger.info(f"Successfully fetched latest observation for {station_id}")

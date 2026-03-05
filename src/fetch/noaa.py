@@ -129,6 +129,7 @@ def fetch_historical(
     params = {
         "dataset": "daily-summaries",
         "stations": station_id,
+        "dataTypes": "TMAX,TMIN,TAVG",  # Include min and max in case no avg
         "startDate": start_date,
         "endDate": end_date,
         "format": "json",
@@ -147,6 +148,11 @@ def fetch_historical(
                 data = json_response.get("results", [])
             else:
                 data = json_response
+
+            # Debug: log what columns/keys we're getting
+            if data and len(data) > 0:
+                logger.info(f"API response columns: {list(data[0].keys())}")
+
             logger.info(
                 f"Successfully fetched {len(data)} records from NOAA for {station_id} "
                 f"({start_date} to {end_date})"
@@ -188,8 +194,9 @@ def process_historical(data: list[dict]) -> pd.DataFrame:
     """Process raw NOAA GHCND historical records into standard format.
 
     **Important Data Transformations:**
-    - Extracts only TAVG (daily average temperature) from raw records
-    - Converts TAVG from tenths of °C to °C (e.g., 225 → 22.5)
+    - Extracts TAVG (daily average temperature) from raw records
+    - If TAVG not available, calculates it as (TMAX + TMIN) / 2
+    - Converts temperature from tenths of °C to °C (e.g., 225 → 22.5)
     - NOAA API returns temperature data in tenths of degrees; this is a known quirk
     - See module docstring for details on data units and schemas
 
@@ -201,7 +208,7 @@ def process_historical(data: list[dict]) -> pd.DataFrame:
         Rows with missing TAVG values are preserved with NaN in temp_avg
 
     Raises:
-        ValueError: If DATE column is missing or no records have TAVG data
+        ValueError: If DATE column is missing or no temperature data available
     """
     df = pd.DataFrame(data)
 
@@ -209,17 +216,27 @@ def process_historical(data: list[dict]) -> pd.DataFrame:
     if "DATE" not in df.columns:
         raise ValueError("NOAA API response missing DATE column")
 
-    if "TAVG" not in df.columns:
+    # Try to get TAVG, or calculate from TMAX/TMIN if not available
+    if "TAVG" in df.columns:
+        df["temp_avg"] = pd.to_numeric(df["TAVG"], errors="coerce")
+        logger.info("Using TAVG directly from API response")
+    elif "TMAX" in df.columns and "TMIN" in df.columns:
+        # Calculate average from max and min (convert from strings to numeric first)
+        tmax = pd.to_numeric(df["TMAX"], errors="coerce")
+        tmin = pd.to_numeric(df["TMIN"], errors="coerce")
+        df["temp_avg"] = (tmax + tmin) / 2
+        logger.info("Calculated TAVG from TMAX and TMIN")
+    else:
         logger.warning(
-            "NOAA API response missing TAVG column; returning empty DataFrame"
+            "NOAA API response missing temperature data (TAVG, TMAX, or TMIN); returning empty DataFrame"
         )
         return pd.DataFrame(columns=["date", "temp_avg"])
 
-    # keep only date and tavg columns
-    df = df[["DATE", "TAVG"]]
-    # rename columns
-    df = df.rename(columns={"DATE": "date", "TAVG": "temp_avg"})
-    # IMPORTANT: convert TAVG from tenths of degrees C to degrees C
+    # Keep only date and temp_avg columns
+    df = df[["DATE", "temp_avg"]]
+    # Rename columns
+    df = df.rename(columns={"DATE": "date"})
+    # IMPORTANT: convert from tenths of degrees C to degrees C
     # NOAA GHCND API returns all temperature values as 10x their actual value
     # Example: 225 in raw data = 22.5°C after conversion
     df["temp_avg"] = df["temp_avg"].apply(lambda x: int(x) / 10 if pd.notnull(x) else x)

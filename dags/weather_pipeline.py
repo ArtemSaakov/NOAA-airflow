@@ -42,9 +42,9 @@ def fetch_noaa_task(**context):
     """Fetch historical NOAA data and and  to CSV."""
     from src.fetch import noaa
 
-    # Default: last 30 days of data (can be overridden as needed)
+    # Default: last 365 days of data for seasonal baseline (can be overridden as needed)
     end_date = datetime.now(timezone.utc)
-    start_date = end_date - timedelta(days=30)
+    start_date = end_date - timedelta(days=365)
 
     LOG.info("Fetching NOAA historical data %s -> %s", start_date, end_date)
     data = noaa.fetch_historical(
@@ -166,7 +166,7 @@ def merge_and_baseline_task(**context):
 
     # Enrich merged with baseline (expects df_obs with date field—ensure a `date` exists)
     if "date" not in merged.columns:
-        merged["date"] = pd.to_datetime(merged["timestamp"]).dt.date
+        merged["date"] = pd.to_datetime(merged["timestamp"]).dt.normalize()
 
     enriched = baseline_mod.enrich_with_baseline(
         merged,
